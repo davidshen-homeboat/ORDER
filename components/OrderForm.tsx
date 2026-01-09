@@ -22,6 +22,16 @@ const OrderForm: React.FC<OrderFormProps> = ({ onSubmit, products }) => {
     { id: '1', name: '', quantity: 1, unit: '件', price: 0, amount: 0, remarks: '' }
   ]);
 
+  const [errors, setErrors] = useState<string[]>([]);
+
+  // 判斷該品項是否為異動或非標品項
+  const checkIfModified = (item: OrderItem) => {
+    if (!item.name) return false;
+    const original = products.find(p => p.name === item.name);
+    // 如果找不到原商品 (名稱不對) 或者 價格不同，則視為異動
+    return !original || original.price !== item.price;
+  };
+
   const handleAddItem = () => {
     setItems([
       ...items,
@@ -61,6 +71,23 @@ const OrderForm: React.FC<OrderFormProps> = ({ onSubmit, products }) => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // 執行必填校驗：名稱、價格異動者必填備註
+    const validationErrors: string[] = [];
+    items.forEach((item, index) => {
+      if (checkIfModified(item) && !item.remarks.trim()) {
+        validationErrors.push(`第 ${index + 1} 項 [${item.name || '未命名'}] 資料與原清單不符，請於商品備註說明更動原因。`);
+      }
+    });
+
+    if (validationErrors.length > 0) {
+      setErrors(validationErrors);
+      // 滾動到錯誤訊息位置
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+
+    setErrors([]);
     const orderData: Omit<Order, 'id'> = {
       ...formData,
       items,
@@ -72,6 +99,21 @@ const OrderForm: React.FC<OrderFormProps> = ({ onSubmit, products }) => {
 
   return (
     <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-8 max-w-4xl mx-auto">
+      {/* 錯誤訊息顯示區 */}
+      {errors.length > 0 && (
+        <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-r-lg mb-6">
+          <div className="flex items-center mb-2">
+            <svg className="w-5 h-5 text-red-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+            </svg>
+            <h3 className="text-red-800 font-bold">請修正以下錯誤再提交</h3>
+          </div>
+          <ul className="list-disc list-inside text-sm text-red-700 space-y-1">
+            {errors.map((err, i) => <li key={i}>{err}</li>)}
+          </ul>
+        </div>
+      )}
+
       <datalist id="product-suggestions">
         {products.map((p, i) => (
           <option key={i} value={p.name}>{`$${p.price} / ${p.unit}`}</option>
@@ -154,59 +196,71 @@ const OrderForm: React.FC<OrderFormProps> = ({ onSubmit, products }) => {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {items.map((item) => (
-              <tr key={item.id} className="group">
-                <td className="px-2 py-3">
-                  <input 
-                    list="product-suggestions"
-                    type="text" placeholder="輸入名稱或從清單選取" required
-                    className="w-full px-2 py-1.5 border-b border-transparent focus:border-blue-400 outline-none bg-transparent"
-                    value={item.name}
-                    onChange={(e) => handleItemChange(item.id, 'name', e.target.value)}
-                  />
-                </td>
-                <td className="px-2 py-3">
-                  <input 
-                    type="number" min="1" required
-                    className="w-full px-1 py-1.5 border-b border-transparent text-center focus:border-blue-400 outline-none bg-transparent"
-                    value={item.quantity}
-                    onChange={(e) => handleItemChange(item.id, 'quantity', Number(e.target.value))}
-                  />
-                </td>
-                <td className="px-2 py-3">
-                  <input 
-                    type="text" placeholder="單位" required
-                    className="w-full px-1 py-1.5 border-b border-transparent text-center focus:border-blue-400 outline-none bg-transparent"
-                    value={item.unit}
-                    onChange={(e) => handleItemChange(item.id, 'unit', e.target.value)}
-                  />
-                </td>
-                <td className="px-2 py-3">
-                  <input 
-                    type="number" min="0" required
-                    className="w-full px-1 py-1.5 border-b border-transparent text-center focus:border-blue-400 outline-none bg-transparent"
-                    value={item.price}
-                    onChange={(e) => handleItemChange(item.id, 'price', Number(e.target.value))}
-                  />
-                </td>
-                <td className="px-4 py-3 text-center font-bold text-gray-900">
-                  ${item.amount.toLocaleString()}
-                </td>
-                <td className="px-2 py-3">
-                  <input 
-                    type="text" placeholder="品項備註"
-                    className="w-full px-1 py-1.5 border-b border-transparent focus:border-blue-400 outline-none bg-transparent"
-                    value={item.remarks}
-                    onChange={(e) => handleItemChange(item.id, 'remarks', e.target.value)}
-                  />
-                </td>
-                <td className="px-2 py-3">
-                  <button type="button" onClick={() => handleRemoveItem(item.id)} className="p-1 opacity-0 group-hover:opacity-100 transition">
-                    <Icons.Trash />
-                  </button>
-                </td>
-              </tr>
-            ))}
+            {items.map((item, index) => {
+              const isModified = checkIfModified(item);
+              const needsRemark = isModified && !item.remarks.trim();
+              
+              return (
+                <tr key={item.id} className="group">
+                  <td className="px-2 py-3">
+                    <input 
+                      list="product-suggestions"
+                      type="text" placeholder="輸入名稱" required
+                      className="w-full px-2 py-1.5 border-b border-transparent focus:border-blue-400 outline-none bg-transparent"
+                      value={item.name}
+                      onChange={(e) => handleItemChange(item.id, 'name', e.target.value)}
+                    />
+                  </td>
+                  <td className="px-2 py-3">
+                    <input 
+                      type="number" min="1" required
+                      className="w-full px-1 py-1.5 border-b border-transparent text-center focus:border-blue-400 outline-none bg-transparent"
+                      value={item.quantity}
+                      onChange={(e) => handleItemChange(item.id, 'quantity', Number(e.target.value))}
+                    />
+                  </td>
+                  <td className="px-2 py-3">
+                    <input 
+                      type="text" placeholder="單位" required
+                      className="w-full px-1 py-1.5 border-b border-transparent text-center focus:border-blue-400 outline-none bg-transparent"
+                      value={item.unit}
+                      onChange={(e) => handleItemChange(item.id, 'unit', e.target.value)}
+                    />
+                  </td>
+                  <td className="px-2 py-3">
+                    <input 
+                      type="number" min="0" required
+                      className={`w-full px-1 py-1.5 border-b border-transparent text-center focus:border-blue-400 outline-none bg-transparent ${isModified ? 'text-orange-600 font-bold' : ''}`}
+                      value={item.price}
+                      onChange={(e) => handleItemChange(item.id, 'price', Number(e.target.value))}
+                    />
+                  </td>
+                  <td className="px-4 py-3 text-center font-bold text-gray-900">
+                    ${item.amount.toLocaleString()}
+                  </td>
+                  <td className="px-2 py-3">
+                    <input 
+                      type="text" 
+                      placeholder={isModified ? "*請註明更動原因" : "品項備註"}
+                      className={`w-full px-1 py-1.5 border-b outline-none bg-transparent transition-colors ${
+                        needsRemark 
+                          ? 'border-red-400 placeholder-red-400' 
+                          : isModified 
+                            ? 'border-orange-300 focus:border-blue-400' 
+                            : 'border-transparent focus:border-blue-400'
+                      }`}
+                      value={item.remarks}
+                      onChange={(e) => handleItemChange(item.id, 'remarks', e.target.value)}
+                    />
+                  </td>
+                  <td className="px-2 py-3">
+                    <button type="button" onClick={() => handleRemoveItem(item.id)} className="p-1 opacity-0 group-hover:opacity-100 transition">
+                      <Icons.Trash />
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -222,7 +276,10 @@ const OrderForm: React.FC<OrderFormProps> = ({ onSubmit, products }) => {
       </div>
 
       <div className="pt-6 border-t flex justify-end">
-        <button type="submit" className="px-10 py-4 bg-blue-600 text-white font-black rounded-xl shadow-xl shadow-blue-200 hover:scale-105 active:scale-95 transition transform">
+        <button 
+          type="submit" 
+          className="px-10 py-4 bg-blue-600 text-white font-black rounded-xl shadow-xl shadow-blue-200 hover:scale-105 active:scale-95 transition transform"
+        >
           確認生成單據
         </button>
       </div>
