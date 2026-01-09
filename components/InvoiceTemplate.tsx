@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Order } from '../types';
+import { Order } from '../types.ts';
 
 interface InvoiceTemplateProps {
   order: Order;
@@ -58,7 +58,6 @@ const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ order, type }) => {
               <td className="border border-gray-300 px-2 py-2 text-gray-500 italic">{item.remarks}</td>
             </tr>
           ))}
-          {/* Fill empty rows for aesthetic purpose */}
           {Array.from({ length: Math.max(0, 8 - order.items.length) }).map((_, i) => (
             <tr key={`empty-${i}`}>
               <td className="border border-gray-300 px-2 py-4"></td>

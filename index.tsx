@@ -1,12 +1,12 @@
 
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import App from './App';
+import App from './App.tsx';
 
 // 註冊 Service Worker 讓 App 在手機上更穩定
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(() => {
+    navigator.serviceWorker.register('./sw.js').catch(() => {
       // 即使失敗也不影響主程式運行
     });
   });

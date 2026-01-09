@@ -1,10 +1,10 @@
 
 import React, { useState, useEffect } from 'react';
-import OrderForm from './components/OrderForm';
-import InvoiceTemplate from './components/InvoiceTemplate';
-import { Order, ViewMode } from './types';
-import { Icons } from './constants';
-import { generateEmailDraft } from './services/geminiService';
+import OrderForm from './components/OrderForm.tsx';
+import InvoiceTemplate from './components/InvoiceTemplate.tsx';
+import { Order, ViewMode } from './types.ts';
+import { Icons } from './constants.tsx';
+import { generateEmailDraft } from './services/geminiService.ts';
 
 const App: React.FC = () => {
   const [view, setView] = useState<ViewMode>(ViewMode.FORM);
@@ -38,7 +38,6 @@ const App: React.FC = () => {
   const syncToGoogleSheet = async (order: Order) => {
     setIsSyncing(true);
     try {
-      // 將資料格式化為適合試算表的扁平格式
       const payload = {
         id: order.id,
         date: order.date,
@@ -49,9 +48,9 @@ const App: React.FC = () => {
         items: order.items.map(i => `${i.name}x${i.quantity}${i.unit}`).join(', ')
       };
 
-      const response = await fetch(sheetUrl, {
+      await fetch(sheetUrl, {
         method: 'POST',
-        mode: 'no-cors', // Apps Script 通常需要 no-cors 或正確處理 CORS
+        mode: 'no-cors',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
@@ -59,7 +58,6 @@ const App: React.FC = () => {
       console.log("資料已送出至 Google Sheets");
     } catch (error) {
       console.error("同步失敗:", error);
-      alert("Google Sheets 同步失敗，請檢查網址是否正確。");
     } finally {
       setIsSyncing(false);
     }
@@ -106,7 +104,6 @@ const App: React.FC = () => {
             <button 
               onClick={() => setShowSettings(true)}
               className="p-2 text-gray-400 hover:text-gray-600 rounded-lg transition"
-              title="設定 Google Sheet"
             >
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.592c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 0 1 0 .255c-.007.378.138.75.43 1.1l1.004.827c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 0 1-.22.127c-.332.183-.582.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 0 1 0-.255c.007-.378-.138-.75-.43-1.1l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281Z" />
@@ -117,12 +114,11 @@ const App: React.FC = () => {
         </div>
       </header>
 
-      {/* Settings Modal */}
       {showSettings && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4">
             <h3 className="text-xl font-bold text-gray-900">Google Sheet 連結設定</h3>
-            <p className="text-sm text-gray-500">請輸入您的 Google Apps Script 部署網址 (Web App URL)，以啟用自動雲端紀錄功能。</p>
+            <p className="text-sm text-gray-500">請輸入您的 Google Apps Script 部署網址 (Web App URL)。</p>
             <input 
               type="url" 
               placeholder="https://script.google.com/macros/s/.../exec"
@@ -130,28 +126,9 @@ const App: React.FC = () => {
               value={sheetUrl}
               onChange={(e) => setSheetUrl(e.target.value)}
             />
-            <div className="bg-gray-50 p-3 rounded-lg border">
-              <p className="text-xs font-bold text-gray-700 mb-1">提示：如何取得網址？</p>
-              <ol className="text-[10px] text-gray-500 list-decimal ml-4 space-y-1">
-                <li>在 Google 試算表點選「擴充功能」>「Apps Script」</li>
-                <li>貼上後端腳本（見說明文件）並點選「部署」</li>
-                <li>選擇「新部署」>「網頁應用程式」</li>
-                <li>設定誰可以存取為「所有人」，部署後複製產出的網址。</li>
-              </ol>
-            </div>
             <div className="flex gap-3 pt-2">
-              <button 
-                onClick={() => setShowSettings(false)}
-                className="flex-1 px-4 py-2 text-gray-600 font-medium hover:bg-gray-100 rounded-lg transition"
-              >
-                取消
-              </button>
-              <button 
-                onClick={() => saveSettings(sheetUrl)}
-                className="flex-1 px-4 py-2 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition"
-              >
-                儲存設定
-              </button>
+              <button onClick={() => setShowSettings(false)} className="flex-1 px-4 py-2 text-gray-600 font-medium hover:bg-gray-100 rounded-lg transition">取消</button>
+              <button onClick={() => saveSettings(sheetUrl)} className="flex-1 px-4 py-2 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition">儲存</button>
             </div>
           </div>
         </div>
@@ -160,14 +137,7 @@ const App: React.FC = () => {
       <main className="max-w-6xl mx-auto px-4 py-6">
         {view === ViewMode.FORM && (
           <div className="space-y-6 animate-in fade-in duration-300">
-            <div>
-              <h2 className="text-2xl font-extrabold text-gray-900">建立銷貨單</h2>
-              {!sheetUrl && (
-                <p className="text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded mt-2 inline-block">
-                  ⚠️ 尚未設定 Google Sheet 網址，訂單僅會儲存於本地。
-                </p>
-              )}
-            </div>
+            <h2 className="text-2xl font-extrabold text-gray-900">建立銷貨單</h2>
             <OrderForm onSubmit={handleOrderSubmit} />
           </div>
         )}
@@ -175,25 +145,10 @@ const App: React.FC = () => {
         {view === ViewMode.PREVIEW && currentOrder && (
           <div className="space-y-6 flex flex-col items-center animate-in zoom-in-95 duration-300">
             <div className="w-full flex justify-between items-center no-print max-w-[21cm]">
-              <button 
-                onClick={() => setView(ViewMode.FORM)}
-                className="text-gray-500 hover:text-gray-900 flex items-center gap-1 text-sm font-medium active:translate-x-[-2px] transition"
-              >
-                ← 返回修改
-              </button>
+              <button onClick={() => setView(ViewMode.FORM)} className="text-gray-500 hover:text-gray-900 flex items-center gap-1 text-sm font-medium active:translate-x-[-2px] transition">← 返回修改</button>
               <div className="flex gap-2">
-                <button 
-                  onClick={handleSendEmail}
-                  className="px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg shadow-sm active:scale-95 transition font-medium"
-                >
-                  發送 Email
-                </button>
-                <button 
-                  onClick={() => window.print()}
-                  className="flex items-center gap-1 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg shadow-sm active:scale-95 transition font-medium"
-                >
-                  <Icons.Print /> 列印 / PDF
-                </button>
+                <button onClick={handleSendEmail} className="px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg shadow-sm active:scale-95 transition font-medium">發送 Email</button>
+                <button onClick={() => window.print()} className="flex items-center gap-1 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg shadow-sm active:scale-95 transition font-medium"><Icons.Print /> 列印</button>
               </div>
             </div>
 
@@ -212,33 +167,26 @@ const App: React.FC = () => {
             <h2 className="text-2xl font-extrabold text-gray-900">歷史記錄</h2>
             <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
               <div className="overflow-x-auto">
-                <table className="w-full text-left">
-                  <thead className="bg-gray-50 border-b text-sm">
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-gray-50 border-b">
                     <tr>
                       <th className="px-4 py-4 font-semibold text-gray-700">日期/店鋪</th>
                       <th className="px-4 py-4 font-semibold text-gray-700 text-right">金額</th>
-                      <th className="px-4 py-4 text-center"></th>
+                      <th className="px-4 py-4"></th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y text-sm">
+                  <tbody className="divide-y">
                     {history.length === 0 ? (
-                      <tr>
-                        <td colSpan={3} className="px-4 py-10 text-center text-gray-400 italic">無歷史紀錄</td>
-                      </tr>
+                      <tr><td colSpan={3} className="px-4 py-10 text-center text-gray-400 italic">無紀錄</td></tr>
                     ) : (
                       history.map((order) => (
-                        <tr key={order.id} className="active:bg-gray-50 transition" onClick={() => {
-                          setCurrentOrder(order);
-                          setView(ViewMode.PREVIEW);
-                        }}>
+                        <tr key={order.id} className="active:bg-gray-50 transition" onClick={() => { setCurrentOrder(order); setView(ViewMode.PREVIEW); }}>
                           <td className="px-4 py-4">
                             <div className="font-medium text-gray-900">{order.storeName}</div>
                             <div className="text-xs text-gray-500 font-mono">{order.date}</div>
                           </td>
                           <td className="px-4 py-4 text-right font-bold text-blue-600">${order.totalAmount.toLocaleString()}</td>
-                          <td className="px-4 py-4 text-center">
-                            <span className="text-gray-300">›</span>
-                          </td>
+                          <td className="px-4 py-4 text-center"><span className="text-gray-300">›</span></td>
                         </tr>
                       ))
                     )}
@@ -252,10 +200,7 @@ const App: React.FC = () => {
 
       {view !== ViewMode.FORM && (
         <div className="fixed bottom-6 right-6 no-print">
-          <button 
-            onClick={() => setView(ViewMode.FORM)}
-            className="w-14 h-14 bg-blue-600 text-white rounded-full shadow-2xl flex items-center justify-center hover:scale-110 active:scale-90 transition transform"
-          >
+          <button onClick={() => setView(ViewMode.FORM)} className="w-14 h-14 bg-blue-600 text-white rounded-full shadow-2xl flex items-center justify-center hover:scale-110 active:scale-90 transition transform">
             <Icons.Plus />
           </button>
         </div>
@@ -264,7 +209,7 @@ const App: React.FC = () => {
       {isSyncing && (
         <div className="fixed bottom-10 left-1/2 -translate-x-1/2 bg-gray-900/95 backdrop-blur text-white px-6 py-3 rounded-full text-xs shadow-2xl flex items-center gap-3 z-[200] border border-white/20">
           <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-          雲端同步中...
+          同步中...
         </div>
       )}
     </div>

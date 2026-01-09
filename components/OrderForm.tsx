@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
-import { Order, OrderItem } from '../types';
-import { Icons } from '../constants';
+import { Order, OrderItem } from '../types.ts';
+import { Icons } from '../constants.tsx';
 
 interface OrderFormProps {
   onSubmit: (order: Order) => void;
