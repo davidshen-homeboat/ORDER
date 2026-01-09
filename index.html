@@ -3,15 +3,37 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>OrderFlow Pro - 二聯式叫貨系統</title>
+    
+    <!-- PWA & Mobile Optimization -->
+    <meta name="theme-color" content="#2563eb">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="OrderFlow">
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/1570/1570887.png">
+    <link rel="manifest" href="manifest.json">
+
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
         body {
             font-family: 'Noto+Sans+TC', sans-serif;
             background-color: #f8fafc;
+            /* 防止手機端長按選取文字影響 App 感官 */
+            -webkit-user-select: none;
+            user-select: none;
+            /* 改善行動端滾動體驗 */
+            overflow-x: hidden;
+            overscroll-behavior-y: contain;
         }
+        
+        /* 讓輸入框恢復選取功能 */
+        input, textarea {
+            -webkit-user-select: text;
+            user-select: text;
+        }
+
         @media print {
             .no-print {
                 display: none !important;
