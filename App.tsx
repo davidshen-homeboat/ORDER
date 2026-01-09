@@ -85,6 +85,12 @@ const App: React.FC = () => {
   const syncToGoogleSheet = async (order: Order) => {
     setIsSyncing(true);
     try {
+      // 構建商品字串，將品項備註也放入其中，確保即使 Script 沒改也能看到
+      const itemsString = order.items.map(i => {
+        const itemRemark = i.remarks ? ` [註:${i.remarks}]` : '';
+        return `${i.name}x${i.quantity}${i.unit}${itemRemark}`;
+      }).join(', ');
+
       const payload = {
         id: order.id,
         date: order.date,
@@ -92,8 +98,8 @@ const App: React.FC = () => {
         taxId: order.taxId,
         address: order.address,
         totalAmount: order.totalAmount,
-        remarks: order.remarks,
-        items: order.items.map(i => `${i.name}x${i.quantity}${i.unit}`).join(', ')
+        remarks: order.remarks, // 這是整單備註
+        items: itemsString
       };
 
       await fetch(sheetUrl, {
@@ -102,6 +108,8 @@ const App: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
+    } catch (error) {
+      console.error("同步至 Google Sheet 失敗:", error);
     } finally {
       setIsSyncing(false);
     }
