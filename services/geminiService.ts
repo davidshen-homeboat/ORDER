@@ -2,10 +2,10 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Order } from "../types.ts";
 
-// Always use the API key directly from process.env.API_KEY
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
 export const generateEmailDraft = async (order: Order) => {
+  // 每次呼叫時才初始化，確保取得最新的 API_KEY 並避免模組載入階段報錯
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
   const prompt = `
     請為以下銷貨單生成一封專業的電子郵件內容：
     店鋪名稱：${order.storeName}
@@ -20,7 +20,6 @@ export const generateEmailDraft = async (order: Order) => {
   `;
 
   try {
-    // Using generateContent with responseSchema to ensure valid JSON output
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: prompt,
@@ -43,7 +42,6 @@ export const generateEmailDraft = async (order: Order) => {
       }
     });
     
-    // Extract text directly from the response object
     if (response.text) {
       return JSON.parse(response.text.trim());
     }

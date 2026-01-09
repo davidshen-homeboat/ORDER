@@ -20,7 +20,6 @@ const App: React.FC = () => {
     if (saved) setHistory(JSON.parse(saved));
   }, []);
 
-  // 當 Sheet URL 存在時，抓取產品資訊
   useEffect(() => {
     if (sheetUrl) {
       fetchProducts();
@@ -28,33 +27,30 @@ const App: React.FC = () => {
   }, [sheetUrl]);
 
   const fetchProducts = async () => {
-    if (!sheetUrl) return;
+    if (!sheetUrl || !sheetUrl.startsWith('http')) return;
+    
     try {
       console.log("正在從雲端抓取產品資訊...");
       const response = await fetch(sheetUrl);
-      
-      // 先取得純文字內容
       const text = await response.text();
       const cleanText = text.trim();
-      
+
+      // 偵錯輔助：如果字串開頭不是 [ 或 {，代表可能不是有效的 JSON
+      if (!cleanText.startsWith('[') && !cleanText.startsWith('{')) {
+        console.warn("⚠️ 收到非 JSON 格式回應:", cleanText.substring(0, 100));
+        return;
+      }
+
       try {
-        // 嘗試解析 JSON
         const data = JSON.parse(cleanText);
-        
         if (Array.isArray(data)) {
           setProducts(data);
-          console.log("✅ 產品資訊已更新:", data);
-        } else if (data && data.error) {
-          console.error("❌ 試算表回報錯誤:", data.error);
-        } else {
-          console.warn("⚠️ 回傳內容非預期陣列格式:", data);
+          console.log("✅ 產品資訊已更新:", data.length, "項商品");
+        } else if (data.error) {
+          console.error("❌ GAS 錯誤:", data.error);
         }
-      } catch (parseError) {
-        console.error("❌ JSON 解析失敗。原始回應內容：", cleanText);
-        // 如果包含 HTML 標籤，通常是權限問題
-        if (cleanText.includes("<!DOCTYPE") || cleanText.includes("<html")) {
-          alert("抓取失敗：請檢查 Google Apps Script 是否已部署為『所有人 (Anyone)』存取。");
-        }
+      } catch (e) {
+        console.error("❌ JSON 解析失敗，原始文字內容:", cleanText);
       }
     } catch (error) {
       console.error("❌ 連線到 Google Sheet 失敗:", error);
@@ -62,8 +58,7 @@ const App: React.FC = () => {
   };
 
   const generateOrderId = (dateStr: string) => {
-    // 格式: ORD-YYYYMMDDXXX
-    const cleanDate = dateStr.replace(/-/g, ''); // YYYYMMDD
+    const cleanDate = dateStr.replace(/-/g, '');
     const todayOrders = history.filter(o => o.date === dateStr);
     const nextNum = (todayOrders.length + 1).toString().padStart(3, '0');
     return `ORD-${cleanDate}${nextNum}`;
@@ -101,7 +96,6 @@ const App: React.FC = () => {
         items: order.items.map(i => `${i.name}x${i.quantity}${i.unit}`).join(', ')
       };
 
-      // POST 請求到 GAS 通常會重導向，no-cors 是必要的
       await fetch(sheetUrl, {
         method: 'POST',
         mode: 'no-cors',
@@ -117,19 +111,23 @@ const App: React.FC = () => {
   };
 
   const saveSettings = (url: string) => {
-    setSheetUrl(url);
-    localStorage.setItem('google-sheet-url', url);
+    const trimmedUrl = url.trim();
+    setSheetUrl(trimmedUrl);
+    localStorage.setItem('google-sheet-url', trimmedUrl);
     setShowSettings(false);
-    // 儲存後立即嘗試抓取
     fetchProducts();
   };
 
   const handleSendEmail = async () => {
     if (!currentOrder) return;
-    const draft = await generateEmailDraft(currentOrder);
-    if (draft) {
-      const mailto = `mailto:${currentOrder.email}?subject=${encodeURIComponent(draft.subject)}&body=${encodeURIComponent(draft.body + "\n\n(附件請參考頁面列印功能保存之 PDF)")}`;
-      window.location.href = mailto;
+    try {
+      const draft = await generateEmailDraft(currentOrder);
+      if (draft) {
+        const mailto = `mailto:${currentOrder.email}?subject=${encodeURIComponent(draft.subject)}&body=${encodeURIComponent(draft.body + "\n\n(附件請參考頁面列印功能保存之 PDF)")}`;
+        window.location.href = mailto;
+      }
+    } catch (err) {
+      console.error("發送郵件失敗:", err);
     }
   };
 
@@ -138,7 +136,7 @@ const App: React.FC = () => {
       <header className="bg-white border-b sticky top-0 z-50 no-print safe-area-inset-top shadow-sm">
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3 cursor-pointer active:opacity-70 transition" onClick={() => setView(ViewMode.FORM)}>
-            <div className="bg-blue-600 text-white p-2 rounded-lg shadow-lg shadow-blue-100">
+            <div className="bg-blue-600 text-white p-2 rounded-lg shadow-lg">
               <Icons.History />
             </div>
             <h1 className="text-lg font-bold text-gray-900 tracking-tight">OrderFlow <span className="text-blue-600">Pro</span></h1>
@@ -165,21 +163,12 @@ const App: React.FC = () => {
         {view === ViewMode.PREVIEW && currentOrder && (
           <div className="space-y-6 flex flex-col items-center">
             <div className="flex gap-4 no-print mb-4">
-              <button 
-                onClick={() => window.print()}
-                className="flex items-center gap-2 px-6 py-3 bg-gray-800 text-white rounded-xl font-bold hover:bg-gray-700 transition"
-              >
-                <Icons.Print /> 列印單據 (PDF)
-              </button>
-              <button 
-                onClick={handleSendEmail}
-                className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-500 transition"
-              >
-                📧 發送通知信
-              </button>
+              <button onClick={() => window.print()} className="flex items-center gap-2 px-6 py-3 bg-gray-800 text-white rounded-xl font-bold hover:bg-gray-700 transition"><Icons.Print /> 列印單據 (PDF)</button>
+              <button onClick={handleSendEmail} className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-500 transition">📧 發送通知信</button>
+              <button onClick={() => setView(ViewMode.FORM)} className="px-4 py-3 text-gray-500 font-bold hover:text-gray-800 transition">返回修改</button>
             </div>
             
-            <div className="bg-white p-4 rounded-xl shadow-lg">
+            <div className="bg-white p-4 rounded-xl shadow-lg w-full max-w-[21cm]">
               <InvoiceTemplate order={currentOrder} type="FACTORY" />
               <div className="my-8 border-t-2 border-dashed border-gray-300 no-print" />
               <InvoiceTemplate order={currentOrder} type="STORE" />
@@ -192,14 +181,7 @@ const App: React.FC = () => {
             <h2 className="text-xl font-bold text-gray-800 mb-6">歷史訂單記錄</h2>
             <div className="grid gap-4">
               {history.map((order) => (
-                <div 
-                  key={order.id}
-                  onClick={() => {
-                    setCurrentOrder(order);
-                    setView(ViewMode.PREVIEW);
-                  }}
-                  className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm hover:border-blue-300 cursor-pointer transition flex justify-between items-center"
-                >
+                <div key={order.id} onClick={() => { setCurrentOrder(order); setView(ViewMode.PREVIEW); }} className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm hover:border-blue-300 cursor-pointer transition flex justify-between items-center">
                   <div>
                     <p className="font-mono text-xs text-gray-400">{order.id}</p>
                     <p className="font-bold text-gray-800">{order.storeName}</p>
@@ -211,51 +193,29 @@ const App: React.FC = () => {
                   </div>
                 </div>
               ))}
-              {history.length === 0 && (
-                <div className="text-center py-20 text-gray-400">尚無歷史紀錄</div>
-              )}
+              {history.length === 0 && <div className="text-center py-20 text-gray-400 font-medium">尚無歷史紀錄</div>}
             </div>
           </div>
         )}
       </main>
 
-      {/* Settings Modal */}
       {showSettings && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl">
+          <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl scale-in">
             <h2 className="text-xl font-bold mb-4">設定 Google Sheet 連結</h2>
-            <p className="text-sm text-gray-500 mb-4">
-              請輸入 Google Apps Script 部署後的 Web App URL，用於同步資料與抓取產品清單。
-            </p>
-            <input 
-              type="text"
-              placeholder="https://script.google.com/macros/s/..."
-              className="w-full px-4 py-3 border rounded-xl mb-6 focus:ring-2 focus:ring-blue-500 outline-none"
-              defaultValue={sheetUrl}
-              onChange={(e) => setSheetUrl(e.target.value)}
-            />
+            <p className="text-sm text-gray-500 mb-4">請輸入 Google Apps Script 部署後的 Web App URL。</p>
+            <input type="text" placeholder="https://script.google.com/macros/s/..." className="w-full px-4 py-3 border rounded-xl mb-6 focus:ring-2 focus:ring-blue-500 outline-none" defaultValue={sheetUrl} onChange={(e) => setSheetUrl(e.target.value.trim())} />
             <div className="flex gap-3">
-              <button 
-                onClick={() => setShowSettings(false)}
-                className="flex-1 px-4 py-3 bg-gray-100 text-gray-600 rounded-xl font-bold hover:bg-gray-200 transition"
-              >
-                取消
-              </button>
-              <button 
-                onClick={() => saveSettings(sheetUrl)}
-                className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition"
-              >
-                儲存設定
-              </button>
+              <button onClick={() => setShowSettings(false)} className="flex-1 px-4 py-3 bg-gray-100 text-gray-600 rounded-xl font-bold hover:bg-gray-200 transition">取消</button>
+              <button onClick={() => saveSettings(sheetUrl)} className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition">儲存並同步</button>
             </div>
           </div>
         </div>
       )}
 
       {isSyncing && (
-        <div className="fixed bottom-6 right-6 bg-white px-4 py-2 rounded-full shadow-lg border border-blue-100 flex items-center gap-2 text-sm font-bold text-blue-600 animate-bounce">
-          <div className="w-2 h-2 bg-blue-600 rounded-full animate-pulse" />
-          同步中...
+        <div className="fixed bottom-6 right-6 bg-white px-4 py-2 rounded-full shadow-lg border border-blue-100 flex items-center gap-2 text-sm font-bold text-blue-600 animate-bounce z-50">
+          <div className="w-2 h-2 bg-blue-600 rounded-full animate-pulse" /> 同步中...
         </div>
       )}
     </div>
