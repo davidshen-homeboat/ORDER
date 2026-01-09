@@ -1,8 +1,9 @@
 
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, Type } from "@google/genai";
 import { Order } from "../types.ts";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+// Always use the API key directly from process.env.API_KEY
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 export const generateEmailDraft = async (order: Order) => {
   const prompt = `
@@ -16,18 +17,33 @@ export const generateEmailDraft = async (order: Order) => {
     郵件應包含：
     1. 主旨：關於 ${order.date} 的出貨通知
     2. 正文：感謝訂購，告知附件為銷貨單電子檔，並列出核心品項。
-    請直接輸出 JSON 格式，包含 subject 和 body 兩個欄位。
   `;
 
   try {
+    // Using generateContent with responseSchema to ensure valid JSON output
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: prompt,
       config: {
-        responseMimeType: "application/json"
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            subject: {
+              type: Type.STRING,
+              description: 'The email subject line.'
+            },
+            body: {
+              type: Type.STRING,
+              description: 'The email body content.'
+            }
+          },
+          required: ["subject", "body"]
+        }
       }
     });
     
+    // Extract text directly from the response object
     if (response.text) {
       return JSON.parse(response.text.trim());
     }

@@ -9,6 +9,12 @@ export interface OrderItem {
   remarks: string;
 }
 
+export interface Product {
+  name: string;
+  unit: string;
+  price: number;
+}
+
 export interface Order {
   id: string;
   date: string;
