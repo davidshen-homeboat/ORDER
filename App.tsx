@@ -27,7 +27,6 @@ const App: React.FC = () => {
     }
   }, [sheetUrl]);
 
-  // 當 currentOrder 改變且進入預覽模式時，預先生成郵件草稿
   useEffect(() => {
     if (currentOrder && view === ViewMode.PREVIEW) {
       prepareEmail(currentOrder);
@@ -49,7 +48,7 @@ const App: React.FC = () => {
   };
 
   const prepareEmail = async (order: Order) => {
-    setEmailDraft(null); // 重置
+    setEmailDraft(null);
     try {
       const draft = await generateEmailDraft(order);
       if (draft) setEmailDraft(draft);
@@ -93,6 +92,7 @@ const App: React.FC = () => {
         taxId: order.taxId,
         address: order.address,
         totalAmount: order.totalAmount,
+        remarks: order.remarks,
         items: order.items.map(i => `${i.name}x${i.quantity}${i.unit}`).join(', ')
       };
 
@@ -110,11 +110,9 @@ const App: React.FC = () => {
   const handleSendEmail = () => {
     if (!currentOrder || !emailDraft) return;
     
-    // 直接觸發，不再使用 await，避免被瀏覽器攔截
     const mailtoBase = `mailto:${currentOrder.email}?subject=${encodeURIComponent(emailDraft.subject)}&body=`;
     const bodySuffix = "\n\n(提示：請手動將剛才儲存的 PDF 單據夾帶至此郵件中)";
     
-    // 確保總長度安全
     let finalBody = emailDraft.body + bodySuffix;
     if (mailtoBase.length + encodeURIComponent(finalBody).length > 1800) {
       finalBody = `您好，附件為訂單 ${currentOrder.id} 的銷貨單。` + bodySuffix;

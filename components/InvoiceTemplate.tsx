@@ -10,7 +10,6 @@ interface InvoiceTemplateProps {
 const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ order, type }) => {
   const isFactory = type === 'FACTORY';
   
-  // 動態計算空白列，如果品項多則減少空白列，確保一頁能塞兩張單
   const minRows = order.items.length > 10 ? 1 : 5;
   const emptyRowsCount = Math.max(0, minRows - order.items.length);
   
@@ -48,7 +47,7 @@ const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ order, type }) => {
             <th className="border border-gray-300 px-2 py-1.5 w-12 text-center">單位</th>
             <th className="border border-gray-300 px-2 py-1.5 w-20 text-right">單價</th>
             <th className="border border-gray-300 px-2 py-1.5 w-20 text-right">小計</th>
-            <th className="border border-gray-300 px-2 py-1.5">備註</th>
+            <th className="border border-gray-300 px-2 py-1.5">商品備註</th>
           </tr>
         </thead>
         <tbody>
@@ -81,6 +80,13 @@ const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ order, type }) => {
           </tr>
         </tfoot>
       </table>
+
+      {order.remarks && (
+        <div className="mt-4 p-2 border border-gray-200 rounded text-[11px] bg-gray-50/50">
+          <span className="font-bold text-gray-600">訂單備註：</span>
+          <span className="text-gray-800 break-words">{order.remarks}</span>
+        </div>
+      )}
 
       <div className="grid grid-cols-3 gap-8 mt-6 text-center text-[11px]">
         <div className="border-t border-gray-400 pt-1">核准人</div>

@@ -15,6 +15,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ onSubmit, products }) => {
     taxId: '',
     address: '',
     email: '',
+    remarks: '',
   });
 
   const [items, setItems] = useState<OrderItem[]>([
@@ -39,7 +40,6 @@ const OrderForm: React.FC<OrderFormProps> = ({ onSubmit, products }) => {
       if (item.id === id) {
         let newItem = { ...item, [field]: value };
         
-        // 如果是修改名稱，嘗試從產品清單中抓取單位與價格
         if (field === 'name') {
           const foundProduct = products.find(p => p.name === value);
           if (foundProduct) {
@@ -48,7 +48,6 @@ const OrderForm: React.FC<OrderFormProps> = ({ onSubmit, products }) => {
           }
         }
         
-        // 重新計算小計
         if (field === 'quantity' || field === 'price' || field === 'name') {
           newItem.amount = Number(newItem.quantity) * Number(newItem.price);
         }
@@ -73,7 +72,6 @@ const OrderForm: React.FC<OrderFormProps> = ({ onSubmit, products }) => {
 
   return (
     <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-8 max-w-4xl mx-auto">
-      {/* 產品名稱的數據清單 */}
       <datalist id="product-suggestions">
         {products.map((p, i) => (
           <option key={i} value={p.name}>{`$${p.price} / ${p.unit}`}</option>
@@ -132,6 +130,16 @@ const OrderForm: React.FC<OrderFormProps> = ({ onSubmit, products }) => {
         </div>
       </div>
 
+      <div className="w-full">
+        <label className="block text-sm font-medium text-gray-700 mb-1">訂單整體備註</label>
+        <textarea 
+          placeholder="填寫特別交代事項 (例如：管理室代收、早上10點前送達...)" 
+          className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition h-20"
+          value={formData.remarks}
+          onChange={(e) => setFormData({...formData, remarks: e.target.value})}
+        />
+      </div>
+
       <div className="overflow-x-auto">
         <table className="w-full text-left min-w-[700px]">
           <thead className="bg-gray-50 text-gray-600 text-xs uppercase font-bold">
@@ -141,7 +149,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ onSubmit, products }) => {
               <th className="px-4 py-3 w-20 text-center">單位</th>
               <th className="px-4 py-3 w-32 text-center">單價</th>
               <th className="px-4 py-3 w-32 text-center">小計</th>
-              <th className="px-4 py-3">備註</th>
+              <th className="px-4 py-3">商品備註</th>
               <th className="px-4 py-3 w-10"></th>
             </tr>
           </thead>
@@ -186,7 +194,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ onSubmit, products }) => {
                 </td>
                 <td className="px-2 py-3">
                   <input 
-                    type="text" placeholder="備註"
+                    type="text" placeholder="品項備註"
                     className="w-full px-1 py-1.5 border-b border-transparent focus:border-blue-400 outline-none bg-transparent"
                     value={item.remarks}
                     onChange={(e) => handleItemChange(item.id, 'remarks', e.target.value)}

@@ -22,6 +22,7 @@ export interface Order {
   taxId: string;
   address: string;
   email: string;
+  remarks: string;
   items: OrderItem[];
   totalAmount: number;
   createdAt: string;
