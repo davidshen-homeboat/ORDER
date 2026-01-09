@@ -1,0 +1,5 @@
+{
+  "name": "OrderFlow Pro - 二聯式叫貨系統",
+  "description": "一個專業的二聯式銷貨單生成工具，支持工廠出貨單與店舖簽收單同步生成，整合 Google Sheets 記錄與電子郵件發送功能。",
+  "requestFramePermissions": []
+}
