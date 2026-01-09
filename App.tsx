@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import OrderForm from './components/OrderForm.tsx';
 import InvoiceTemplate from './components/InvoiceTemplate.tsx';
 import { Order, ViewMode, Product } from './types.ts';
@@ -12,7 +12,7 @@ const App: React.FC = () => {
   const [history, setHistory] = useState<Order[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [isGeneratingEmail, setIsGeneratingEmail] = useState(false);
+  const [emailDraft, setEmailDraft] = useState<{ subject: string, body: string } | null>(null);
   const [sheetUrl, setSheetUrl] = useState<string>(localStorage.getItem('google-sheet-url') || '');
   const [showSettings, setShowSettings] = useState(false);
 
@@ -27,26 +27,37 @@ const App: React.FC = () => {
     }
   }, [sheetUrl]);
 
+  // 當 currentOrder 改變且進入預覽模式時，預先生成郵件草稿
+  useEffect(() => {
+    if (currentOrder && view === ViewMode.PREVIEW) {
+      prepareEmail(currentOrder);
+    }
+  }, [currentOrder, view]);
+
   const fetchProducts = async () => {
     if (!sheetUrl || !sheetUrl.startsWith('http')) return;
-    
     try {
       const response = await fetch(sheetUrl);
       const text = await response.text();
       const cleanText = text.trim();
-
       if (!cleanText.startsWith('[') && !cleanText.startsWith('{')) return;
-
-      try {
-        const data = JSON.parse(cleanText);
-        if (Array.isArray(data)) {
-          setProducts(data);
-        }
-      } catch (e) {
-        console.error("JSON 解析失敗");
-      }
-    } catch (error) {
+      const data = JSON.parse(cleanText);
+      if (Array.isArray(data)) setProducts(data);
+    } catch (e) {
       console.error("抓取產品失敗");
+    }
+  };
+
+  const prepareEmail = async (order: Order) => {
+    setEmailDraft(null); // 重置
+    try {
+      const draft = await generateEmailDraft(order);
+      if (draft) setEmailDraft(draft);
+    } catch (err) {
+      setEmailDraft({
+        subject: `[出貨通知] ${order.storeName} - ${order.date}`,
+        body: `您好，附件為您的銷貨單明細。金額共計 NT$ ${order.totalAmount.toLocaleString()}。`
+      });
     }
   };
 
@@ -96,30 +107,20 @@ const App: React.FC = () => {
     }
   };
 
-  const handleSendEmail = async () => {
-    if (!currentOrder || isGeneratingEmail) return;
+  const handleSendEmail = () => {
+    if (!currentOrder || !emailDraft) return;
     
-    setIsGeneratingEmail(true);
-    try {
-      const draft = await generateEmailDraft(currentOrder);
-      if (draft) {
-        // 防止 mailto 連結過長導致失敗 (瀏覽器限制約 2000 字元)
-        const bodySuffix = "\n\n(附件請參考頁面列印功能保存之 PDF)";
-        let body = draft.body;
-        const mailtoBase = `mailto:${currentOrder.email}?subject=${encodeURIComponent(draft.subject)}&body=`;
-        
-        // 若總長度可能超標，進行簡單截斷
-        if ((mailtoBase.length + encodeURIComponent(body + bodySuffix).length) > 2000) {
-          body = body.substring(0, 1000) + "...(品項過多，請查閱附件銷貨單)";
-        }
-
-        window.location.href = `${mailtoBase}${encodeURIComponent(body + bodySuffix)}`;
-      }
-    } catch (err) {
-      alert("郵件生成失敗，請手動發送");
-    } finally {
-      setIsGeneratingEmail(false);
+    // 直接觸發，不再使用 await，避免被瀏覽器攔截
+    const mailtoBase = `mailto:${currentOrder.email}?subject=${encodeURIComponent(emailDraft.subject)}&body=`;
+    const bodySuffix = "\n\n(提示：請手動將剛才儲存的 PDF 單據夾帶至此郵件中)";
+    
+    // 確保總長度安全
+    let finalBody = emailDraft.body + bodySuffix;
+    if (mailtoBase.length + encodeURIComponent(finalBody).length > 1800) {
+      finalBody = `您好，附件為訂單 ${currentOrder.id} 的銷貨單。` + bodySuffix;
     }
+
+    window.location.href = `${mailtoBase}${encodeURIComponent(finalBody)}`;
   };
 
   return (
@@ -150,16 +151,24 @@ const App: React.FC = () => {
 
         {view === ViewMode.PREVIEW && currentOrder && (
           <div className="space-y-6 flex flex-col items-center">
-            <div className="flex flex-wrap justify-center gap-4 no-print mb-4">
-              <button onClick={() => window.print()} className="flex items-center gap-2 px-6 py-3 bg-gray-800 text-white rounded-xl font-bold hover:bg-gray-700 transition"><Icons.Print /> 列印單據 (PDF)</button>
-              <button 
-                disabled={isGeneratingEmail}
-                onClick={handleSendEmail} 
-                className={`flex items-center gap-2 px-6 py-3 ${isGeneratingEmail ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500'} text-white rounded-xl font-bold transition`}
-              >
-                {isGeneratingEmail ? '正在生成郵件...' : '📧 發送通知信'}
-              </button>
-              <button onClick={() => setView(ViewMode.FORM)} className="px-4 py-3 text-gray-500 font-bold hover:text-gray-800 transition">返回修改</button>
+            <div className="flex flex-col items-center gap-4 no-print mb-6 w-full max-w-2xl bg-white p-6 rounded-2xl shadow-sm border border-blue-100">
+              <h3 className="text-blue-800 font-bold flex items-center gap-2">
+                <span className="bg-blue-100 w-6 h-6 flex items-center justify-center rounded-full text-sm">!</span> 
+                傳送單據兩步驟：
+              </h3>
+              <div className="flex flex-wrap justify-center gap-3">
+                <button onClick={() => window.print()} className="flex items-center gap-2 px-6 py-3 bg-gray-800 text-white rounded-xl font-bold hover:bg-gray-700 transition">
+                  <Icons.Print /> 第一步：列印另存為 PDF
+                </button>
+                <button 
+                  disabled={!emailDraft}
+                  onClick={handleSendEmail} 
+                  className={`flex items-center gap-2 px-6 py-3 ${!emailDraft ? 'bg-blue-300' : 'bg-blue-600 hover:bg-blue-500'} text-white rounded-xl font-bold transition`}
+                >
+                  {!emailDraft ? '正在準備郵件...' : '第二步：發送通知 (提醒附件)'}
+                </button>
+              </div>
+              <button onClick={() => setView(ViewMode.FORM)} className="text-sm text-gray-400 font-medium hover:text-gray-600 transition underline">返回修改內容</button>
             </div>
             
             <div className="print-container w-full flex flex-col items-center">
