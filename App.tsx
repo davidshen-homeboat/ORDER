@@ -12,6 +12,7 @@ const App: React.FC = () => {
   const [history, setHistory] = useState<Order[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isGeneratingEmail, setIsGeneratingEmail] = useState(false);
   const [sheetUrl, setSheetUrl] = useState<string>(localStorage.getItem('google-sheet-url') || '');
   const [showSettings, setShowSettings] = useState(false);
 
@@ -30,30 +31,22 @@ const App: React.FC = () => {
     if (!sheetUrl || !sheetUrl.startsWith('http')) return;
     
     try {
-      console.log("正在從雲端抓取產品資訊...");
       const response = await fetch(sheetUrl);
       const text = await response.text();
       const cleanText = text.trim();
 
-      // 偵錯輔助：如果字串開頭不是 [ 或 {，代表可能不是有效的 JSON
-      if (!cleanText.startsWith('[') && !cleanText.startsWith('{')) {
-        console.warn("⚠️ 收到非 JSON 格式回應:", cleanText.substring(0, 100));
-        return;
-      }
+      if (!cleanText.startsWith('[') && !cleanText.startsWith('{')) return;
 
       try {
         const data = JSON.parse(cleanText);
         if (Array.isArray(data)) {
           setProducts(data);
-          console.log("✅ 產品資訊已更新:", data.length, "項商品");
-        } else if (data.error) {
-          console.error("❌ GAS 錯誤:", data.error);
         }
       } catch (e) {
-        console.error("❌ JSON 解析失敗，原始文字內容:", cleanText);
+        console.error("JSON 解析失敗");
       }
     } catch (error) {
-      console.error("❌ 連線到 Google Sheet 失敗:", error);
+      console.error("抓取產品失敗");
     }
   };
 
@@ -64,22 +57,18 @@ const App: React.FC = () => {
     return `ORD-${cleanDate}${nextNum}`;
   };
 
-  const saveToHistory = (order: Order) => {
-    const newHistory = [order, ...history];
-    setHistory(newHistory);
-    localStorage.setItem('order-history', JSON.stringify(newHistory));
-  };
-
   const handleOrderSubmit = async (orderData: Omit<Order, 'id'>) => {
     const newId = generateOrderId(orderData.date);
     const order: Order = { ...orderData, id: newId };
     
     setCurrentOrder(order);
     setView(ViewMode.PREVIEW);
-    saveToHistory(order);
+    const newHistory = [order, ...history];
+    setHistory(newHistory);
+    localStorage.setItem('order-history', JSON.stringify(newHistory));
     
     if (sheetUrl) {
-      await syncToGoogleSheet(order);
+      syncToGoogleSheet(order);
     }
   };
 
@@ -102,32 +91,34 @@ const App: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-      console.log("✅ 同步請求已送出");
-    } catch (error) {
-      console.error("❌ 同步失敗:", error);
     } finally {
       setIsSyncing(false);
     }
   };
 
-  const saveSettings = (url: string) => {
-    const trimmedUrl = url.trim();
-    setSheetUrl(trimmedUrl);
-    localStorage.setItem('google-sheet-url', trimmedUrl);
-    setShowSettings(false);
-    fetchProducts();
-  };
-
   const handleSendEmail = async () => {
-    if (!currentOrder) return;
+    if (!currentOrder || isGeneratingEmail) return;
+    
+    setIsGeneratingEmail(true);
     try {
       const draft = await generateEmailDraft(currentOrder);
       if (draft) {
-        const mailto = `mailto:${currentOrder.email}?subject=${encodeURIComponent(draft.subject)}&body=${encodeURIComponent(draft.body + "\n\n(附件請參考頁面列印功能保存之 PDF)")}`;
-        window.location.href = mailto;
+        // 防止 mailto 連結過長導致失敗 (瀏覽器限制約 2000 字元)
+        const bodySuffix = "\n\n(附件請參考頁面列印功能保存之 PDF)";
+        let body = draft.body;
+        const mailtoBase = `mailto:${currentOrder.email}?subject=${encodeURIComponent(draft.subject)}&body=`;
+        
+        // 若總長度可能超標，進行簡單截斷
+        if ((mailtoBase.length + encodeURIComponent(body + bodySuffix).length) > 2000) {
+          body = body.substring(0, 1000) + "...(品項過多，請查閱附件銷貨單)";
+        }
+
+        window.location.href = `${mailtoBase}${encodeURIComponent(body + bodySuffix)}`;
       }
     } catch (err) {
-      console.error("發送郵件失敗:", err);
+      alert("郵件生成失敗，請手動發送");
+    } finally {
+      setIsGeneratingEmail(false);
     }
   };
 
@@ -135,21 +126,18 @@ const App: React.FC = () => {
     <div className="min-h-screen bg-gray-50 pb-20 safe-area-inset-bottom">
       <header className="bg-white border-b sticky top-0 z-50 no-print safe-area-inset-top shadow-sm">
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3 cursor-pointer active:opacity-70 transition" onClick={() => setView(ViewMode.FORM)}>
+          <div className="flex items-center gap-3 cursor-pointer" onClick={() => setView(ViewMode.FORM)}>
             <div className="bg-blue-600 text-white p-2 rounded-lg shadow-lg">
               <Icons.History />
             </div>
-            <h1 className="text-lg font-bold text-gray-900 tracking-tight">OrderFlow <span className="text-blue-600">Pro</span></h1>
+            <h1 className="text-lg font-bold text-gray-900">OrderFlow <span className="text-blue-600">Pro</span></h1>
           </div>
           
           <nav className="flex items-center gap-1">
-            <button onClick={() => setView(ViewMode.FORM)} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${view === ViewMode.FORM ? 'bg-blue-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-100'}`}>新建</button>
-            <button onClick={() => setView(ViewMode.HISTORY)} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${view === ViewMode.HISTORY ? 'bg-blue-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-100'}`}>歷史</button>
-            <button onClick={() => setShowSettings(true)} className="p-2 text-gray-400 hover:text-blue-600 transition-colors ml-2" title="設定連結">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.592c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 0 1 0 .255c-.007.378.138.75.43 1.1l1.004.827c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 0 1-.22.127c-.332.183-.582.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 0 1 0-.255c.007-.378-.138-.75-.43-1.1l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.213-1.281Z" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
-              </svg>
+            <button onClick={() => setView(ViewMode.FORM)} className={`px-4 py-2 rounded-lg text-sm font-bold ${view === ViewMode.FORM ? 'bg-blue-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-100'}`}>新建</button>
+            <button onClick={() => setView(ViewMode.HISTORY)} className={`px-4 py-2 rounded-lg text-sm font-bold ${view === ViewMode.HISTORY ? 'bg-blue-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-100'}`}>歷史</button>
+            <button onClick={() => setShowSettings(true)} className="p-2 text-gray-400 hover:text-blue-600 ml-2">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.592c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 0 1 0 .255c-.007.378.138.75.43 1.1l1.004.827c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 0 1-.22.127c-.332.183-.582.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 0 1 0-.255c.007-.378-.138-.75-.43-1.1l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.213-1.281Z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" /></svg>
             </button>
           </nav>
         </div>
@@ -162,15 +150,21 @@ const App: React.FC = () => {
 
         {view === ViewMode.PREVIEW && currentOrder && (
           <div className="space-y-6 flex flex-col items-center">
-            <div className="flex gap-4 no-print mb-4">
+            <div className="flex flex-wrap justify-center gap-4 no-print mb-4">
               <button onClick={() => window.print()} className="flex items-center gap-2 px-6 py-3 bg-gray-800 text-white rounded-xl font-bold hover:bg-gray-700 transition"><Icons.Print /> 列印單據 (PDF)</button>
-              <button onClick={handleSendEmail} className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-500 transition">📧 發送通知信</button>
+              <button 
+                disabled={isGeneratingEmail}
+                onClick={handleSendEmail} 
+                className={`flex items-center gap-2 px-6 py-3 ${isGeneratingEmail ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500'} text-white rounded-xl font-bold transition`}
+              >
+                {isGeneratingEmail ? '正在生成郵件...' : '📧 發送通知信'}
+              </button>
               <button onClick={() => setView(ViewMode.FORM)} className="px-4 py-3 text-gray-500 font-bold hover:text-gray-800 transition">返回修改</button>
             </div>
             
-            <div className="bg-white p-4 rounded-xl shadow-lg w-full max-w-[21cm]">
+            <div className="print-container w-full flex flex-col items-center">
               <InvoiceTemplate order={currentOrder} type="FACTORY" />
-              <div className="my-8 border-t-2 border-dashed border-gray-300 no-print" />
+              <div className="w-full my-4 border-t-2 border-dashed border-gray-300 no-print" />
               <InvoiceTemplate order={currentOrder} type="STORE" />
             </div>
           </div>
@@ -203,11 +197,10 @@ const App: React.FC = () => {
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl scale-in">
             <h2 className="text-xl font-bold mb-4">設定 Google Sheet 連結</h2>
-            <p className="text-sm text-gray-500 mb-4">請輸入 Google Apps Script 部署後的 Web App URL。</p>
             <input type="text" placeholder="https://script.google.com/macros/s/..." className="w-full px-4 py-3 border rounded-xl mb-6 focus:ring-2 focus:ring-blue-500 outline-none" defaultValue={sheetUrl} onChange={(e) => setSheetUrl(e.target.value.trim())} />
             <div className="flex gap-3">
-              <button onClick={() => setShowSettings(false)} className="flex-1 px-4 py-3 bg-gray-100 text-gray-600 rounded-xl font-bold hover:bg-gray-200 transition">取消</button>
-              <button onClick={() => saveSettings(sheetUrl)} className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition">儲存並同步</button>
+              <button onClick={() => setShowSettings(false)} className="flex-1 px-4 py-3 bg-gray-100 text-gray-600 rounded-xl font-bold">取消</button>
+              <button onClick={() => { localStorage.setItem('google-sheet-url', sheetUrl); setShowSettings(false); fetchProducts(); }} className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-xl font-bold">儲存並同步</button>
             </div>
           </div>
         </div>

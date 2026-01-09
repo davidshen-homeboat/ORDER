@@ -25,7 +25,31 @@
         
         @media print {
             .no-print { display: none !important; }
-            body { background-color: white; }
+            body { 
+                background-color: white !important;
+                margin: 0 !important;
+                padding: 0 !important;
+            }
+            @page {
+                size: A4;
+                margin: 8mm;
+            }
+            .print-container {
+                display: flex;
+                flex-direction: column;
+                gap: 5mm;
+            }
+            .invoice-box {
+                page-break-inside: avoid;
+                border: 1px solid #ccc !important;
+                box-shadow: none !important;
+                margin-bottom: 0 !important;
+                padding: 5mm !important;
+            }
+            .invoice-table th, .invoice-table td {
+                padding: 4px 6px !important;
+                font-size: 11px !important;
+            }
         }
 
         .scale-in {
